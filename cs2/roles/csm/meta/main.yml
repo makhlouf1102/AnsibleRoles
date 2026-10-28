@@ -1,0 +1,17 @@
+---
+galaxy_info:
+  author: "Mak"
+  description: Deploy the published CSM-managed CS2 server image with Docker Compose.
+  company: "Lan ETS"
+  license: "MIT"
+  min_ansible_version: "2.15.0"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+  galaxy_tags:
+    - cs2
+    - csm
+    - gameserver
+dependencies: []

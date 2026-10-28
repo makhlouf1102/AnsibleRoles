@@ -1,0 +1,15 @@
+services:
+  cs2:
+    image: ${CS2_IMAGE_REGISTRY:-git.etsmtl.club}/lan_ets/cs2-csm-server:${CS2_IMAGE_TAG:-dev}
+    pull_policy: always
+    restart: unless-stopped
+    init: true
+
+    environment:
+      RCON_PASSWORD: ${CS2_RCONPW:?Set CS2_RCONPW in the environment or .env file}
+      CS2_SERVERNAME: ${CS2_SERVERNAME:-CS2 Server}
+
+    ports:
+      - "27015:27015/udp"
+      - "27015:27015/tcp"
+      - "27020:27020/udp"

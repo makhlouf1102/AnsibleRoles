@@ -1,0 +1,6 @@
+---
+csm_compose_directory: /opt/cs2
+csm_image_tag: dev
+csm_registry_host: git.etsmtl.club
+csm_registry_username: ""
+csm_registry_password: ""

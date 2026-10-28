@@ -1,0 +1,99 @@
+---
+- name: Check CS2 container requirements
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution == "Ubuntu"
+      - ansible_architecture in ["x86_64", "amd64"]
+      - cs2_rcon_password | default("") | length > 0
+      - (csm_registry_username | length == 0) == (csm_registry_password | length == 0)
+      - csm_image_tag is match('^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$')
+    fail_msg: >-
+      The CS2 Compose deployment requires an Ubuntu amd64 host, a non-empty
+      cs2_rcon_password, a valid image tag, and either both or neither registry
+      credentials.
+
+- name: Create the CS2 Compose directory
+  ansible.builtin.file:
+    path: "{{ csm_compose_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Write the CS2 Compose environment file
+  ansible.builtin.copy:
+    dest: "{{ csm_compose_directory }}/.env"
+    content: |
+      CS2_IMAGE_REGISTRY={{ csm_registry_host }}
+      CS2_IMAGE_TAG={{ csm_image_tag }}
+      CS2_RCONPW={{ cs2_rcon_password }}
+    owner: root
+    group: root
+    mode: "0600"
+  become: true
+  no_log: true
+
+- name: Create a private Docker client configuration directory
+  ansible.builtin.file:
+    path: "{{ csm_compose_directory }}/.docker"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  become: true
+
+- name: Configure optional Forgejo registry credentials
+  ansible.builtin.copy:
+    dest: "{{ csm_compose_directory }}/.docker/config.json"
+    content: |
+      {
+        "auths": {
+          "{{ csm_registry_host }}": {
+            "auth": "{{ (csm_registry_username ~ ':' ~ csm_registry_password) | b64encode }}"
+          }
+        }
+      }
+    owner: root
+    group: root
+    mode: "0600"
+  become: true
+  no_log: true
+  when: csm_registry_username | length > 0
+
+- name: Remove stale Forgejo registry credentials when not configured
+  ansible.builtin.file:
+    path: "{{ csm_compose_directory }}/.docker/config.json"
+    state: absent
+  become: true
+  when: csm_registry_username | length == 0
+
+- name: Resolve the bundled Compose template path
+  ansible.builtin.set_fact:
+    csm_compose_template_path: "{{ role_path }}/templates/compose.yaml.j2"
+  changed_when: false
+
+- name: Install Docker and the CS2 Compose file
+  ansible.builtin.include_role:
+    name: cedille.docker.install
+    apply:
+      environment:
+        DOCKER_CONFIG: "{{ csm_compose_directory }}/.docker"
+  vars:
+    install_docker_compose_source_type: template
+    install_docker_compose_template_src: "{{ csm_compose_template_path }}"
+    install_docker_compose_filename: compose.yaml
+    install_docker_compose_target_dir: "{{ csm_compose_directory }}"
+    install_docker_compose_owner: root
+    install_docker_compose_group: root
+    install_docker_compose_start: false
+    install_docker_registry_mirror_enabled: false
+    docker_registry_mirror_enabled: false
+
+- name: Pull and start the published CS2 image with Docker Compose
+  community.docker.docker_compose_v2:
+    project_src: "{{ csm_compose_directory }}"
+    state: present
+  environment:
+    DOCKER_CONFIG: "{{ csm_compose_directory }}/.docker"
+  become: true

@@ -26,3 +26,4 @@
   community.docker.docker_compose_v2:
     project_src: "{{ install_docker_compose_target_dir }}"
     state: present
+  when: install_docker_compose_start | bool

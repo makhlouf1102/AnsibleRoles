@@ -1,0 +1,237 @@
+---
+- name: Check CS2 Server Manager host requirements
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution in ["Debian", "Ubuntu"]
+      - ansible_architecture in ["x86_64", "aarch64"]
+      - ansible_service_mgr == "systemd"
+      - cs2_server_manager_user != "root"
+      - cs2_server_manager_readyup_channel in ["stable", "beta"]
+      - cs2_server_manager_readyup_license in ["noncommercial", "commercial"]
+      - cs2_server_manager_readyup_license != "commercial" or cs2_server_manager_license_key | length > 0
+      - not (cs2_server_manager_bootstrap_servers | bool and cs2_server_manager_configure_instance_backend | bool)
+      - not (cs2_server_manager_bootstrap_servers | bool) or cs2_server_manager_num_servers | int > 0
+      - >-
+        not (cs2_server_manager_bootstrap_servers | bool) or
+        cs2_server_manager_rcon_password | length > 0
+      - >-
+        cs2_server_manager_version == "latest" or
+        cs2_server_manager_version is match('^v[0-9]+[.][0-9]+[.][0-9]+$')
+    fail_msg: >-
+      CS2 Server Manager requires Debian or Ubuntu on x86_64 or arm64 with
+      systemd, and must run as a regular Linux account. Server bootstrap needs
+      a non-empty RCON password and cannot be combined with instance mode.
+      Ready Up channel must be stable or beta, and its license must be
+      noncommercial or commercial (commercial use also needs a license key).
+      Pin CSM with a v-prefixed release tag or use latest.
+
+- name: Create the CS2 Server Manager group
+  ansible.builtin.group:
+    name: "{{ cs2_server_manager_group }}"
+    state: present
+  become: true
+
+- name: Create the CS2 Server Manager user
+  ansible.builtin.user:
+    name: "{{ cs2_server_manager_user }}"
+    group: "{{ cs2_server_manager_group }}"
+    home: "{{ cs2_server_manager_home }}"
+    create_home: true
+    shell: /bin/bash
+    state: present
+  become: true
+
+- name: Select the CSM release asset for this architecture
+  ansible.builtin.set_fact:
+    cs2_server_manager_asset: >-
+      csm-linux-{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}
+    cs2_server_manager_release_path: >-
+      {{ 'latest/download' if cs2_server_manager_version == 'latest' else 'download/' ~ cs2_server_manager_version }}
+  changed_when: false
+
+- name: Download CS2 Server Manager
+  ansible.builtin.get_url:
+    url: >-
+      https://github.com/Auto-Tournament/cs2-server-manager/releases/{{ cs2_server_manager_release_path }}/{{ cs2_server_manager_asset }}
+    dest: "{{ cs2_server_manager_binary }}"
+    owner: root
+    group: root
+    mode: "0755"
+    # Ensure changing from latest to a pinned tag (or between tags) replaces
+    # the installed binary. An unchanged download is not reported as changed.
+    force: true
+  become: true
+
+- name: Set up CS2 Server Manager host dependencies and user files
+  ansible.builtin.command:
+    argv:
+      - "{{ cs2_server_manager_binary }}"
+      - setup-host
+  environment:
+    HOME: "{{ cs2_server_manager_home }}"
+    LOGNAME: "{{ cs2_server_manager_user }}"
+    SUDO_USER: "{{ cs2_server_manager_user }}"
+    USER: "{{ cs2_server_manager_user }}"
+  become: true
+  changed_when: false
+
+- name: Configure CS2 Server Manager to use instance mode
+  ansible.builtin.command:
+    argv:
+      - "{{ cs2_server_manager_binary }}"
+      - instance
+      - config
+      - backend
+      - instances
+  become: true
+  become_user: "{{ cs2_server_manager_user }}"
+  environment:
+    HOME: "{{ cs2_server_manager_home }}"
+  changed_when: false
+  when: cs2_server_manager_configure_instance_backend | bool
+
+- name: Show available disk space before downloading CS2
+  ansible.builtin.command:
+    argv:
+      - df
+      - -h
+      - /
+      - "{{ cs2_server_manager_home }}"
+      - /tmp
+  become: true
+  changed_when: false
+  when: cs2_server_manager_bootstrap_servers | bool
+
+- name: Bootstrap CS2 servers
+  block:
+    - name: Run CSM bootstrap
+      ansible.builtin.command:
+        argv:
+          - "{{ cs2_server_manager_binary }}"
+          - bootstrap
+        creates: "{{ cs2_server_manager_home }}/server-1"
+      become: true
+      become_user: "{{ cs2_server_manager_user }}"
+      environment:
+        BASE_GAME_PORT: "{{ cs2_server_manager_base_game_port }}"
+        BASE_TV_PORT: "{{ cs2_server_manager_base_tv_port }}"
+        HOME: "{{ cs2_server_manager_home }}"
+        HOSTNAME_PREFIX: "{{ cs2_server_manager_hostname_prefix }}"
+        NUM_SERVERS: "{{ cs2_server_manager_num_servers }}"
+        RCON_PASSWORD: "{{ cs2_server_manager_rcon_password }}"
+      no_log: true
+  rescue:
+    - name: Show available disk space after a failed bootstrap
+      ansible.builtin.command:
+        argv:
+          - df
+          - -h
+          - /
+          - "{{ cs2_server_manager_home }}"
+          - /tmp
+      become: true
+      changed_when: false
+      failed_when: false
+
+    - name: Report the bootstrap log location
+      ansible.builtin.fail:
+        msg: >-
+          CSM bootstrap failed. The RCON password is hidden from Ansible output;
+          inspect /tmp/csm-bootstrap.log on the target for details.
+  when: cs2_server_manager_bootstrap_servers | bool
+
+- name: Select the Ready Up release channel
+  ansible.builtin.command:
+    argv:
+      - "{{ cs2_server_manager_binary }}"
+      - plugins
+      - channel
+      - "{{ cs2_server_manager_readyup_channel }}"
+  become: true
+  become_user: "{{ cs2_server_manager_user }}"
+  environment:
+    HOME: "{{ cs2_server_manager_home }}"
+  changed_when: false
+  when: cs2_server_manager_bootstrap_servers | bool
+
+- name: Accept the Ready Up license choice
+  ansible.builtin.command:
+    argv:
+      - "{{ cs2_server_manager_binary }}"
+      - plugins
+      - license
+      - "{{ cs2_server_manager_readyup_license }}"
+  become: true
+  become_user: "{{ cs2_server_manager_user }}"
+  environment:
+    HOME: "{{ cs2_server_manager_home }}"
+  changed_when: false
+  when: cs2_server_manager_bootstrap_servers | bool
+
+- name: Set the commercial license key
+  ansible.builtin.command:
+    argv:
+      - "{{ cs2_server_manager_binary }}"
+      - license
+      - set
+      - "{{ cs2_server_manager_license_key }}"
+  become: true
+  become_user: "{{ cs2_server_manager_user }}"
+  environment:
+    HOME: "{{ cs2_server_manager_home }}"
+  changed_when: false
+  no_log: true
+  when:
+    - cs2_server_manager_bootstrap_servers | bool
+    - cs2_server_manager_readyup_license == "commercial"
+
+- name: Check the Ready Up update marker
+  ansible.builtin.stat:
+    path: >-
+      {{ cs2_server_manager_home }}/.ansible-csm-readyup-{{ cs2_server_manager_readyup_channel }}-{{ cs2_server_manager_readyup_license }}
+  register: cs2_server_manager_readyup_marker
+  become: true
+  become_user: "{{ cs2_server_manager_user }}"
+  when: cs2_server_manager_bootstrap_servers | bool
+
+- name: Install or update Ready Up plugins
+  ansible.builtin.command:
+    argv:
+      - "{{ cs2_server_manager_binary }}"
+      - update-plugins
+  become: true
+  become_user: "{{ cs2_server_manager_user }}"
+  environment:
+    HOME: "{{ cs2_server_manager_home }}"
+  register: cs2_server_manager_readyup_update
+  when: >-
+    cs2_server_manager_bootstrap_servers | bool and
+    (cs2_server_manager_force_readyup_update | bool or
+    not cs2_server_manager_readyup_marker.stat.exists)
+
+- name: Record the Ready Up installation
+  ansible.builtin.file:
+    path: >-
+      {{ cs2_server_manager_home }}/.ansible-csm-readyup-{{ cs2_server_manager_readyup_channel }}-{{ cs2_server_manager_readyup_license }}
+    state: touch
+    owner: "{{ cs2_server_manager_user }}"
+    group: "{{ cs2_server_manager_group }}"
+    mode: "0600"
+  become: true
+  when:
+    - cs2_server_manager_bootstrap_servers | bool
+    - cs2_server_manager_readyup_update is changed
+
+- name: Download the shared CS2 installation
+  ansible.builtin.command:
+    argv:
+      - "{{ cs2_server_manager_binary }}"
+      - update-game
+  become: true
+  become_user: "{{ cs2_server_manager_user }}"
+  environment:
+    HOME: "{{ cs2_server_manager_home }}"
+  changed_when: false
+  when:
+    - cs2_server_manager_preload_game | bool
+    - not cs2_server_manager_bootstrap_servers | bool

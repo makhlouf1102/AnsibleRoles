@@ -1,0 +1,22 @@
+---
+galaxy_info:
+  author: "Mak"
+  description: Install and prepare Auto Tournament CS2 Server Manager hosts.
+  company: "Lan ETS"
+  license: "MIT"
+  min_ansible_version: "2.15.0"
+  platforms:
+    - name: Debian
+      versions:
+        - bookworm
+        - trixie
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+  galaxy_tags:
+    - cs2
+    - counterstrike
+    - gameserver
+    - autotournament
+dependencies: []

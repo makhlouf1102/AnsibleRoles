@@ -1,0 +1,29 @@
+---
+# Keep CSM's data under the dedicated account used by the server image.
+cs2_server_manager_user: cs2servermanager
+cs2_server_manager_group: "{{ cs2_server_manager_user }}"
+cs2_server_manager_home: "/home/{{ cs2_server_manager_user }}"
+
+cs2_server_manager_binary: /usr/local/bin/csm
+cs2_server_manager_version: latest
+
+# By default, bootstrap one standalone server like the supplied image build.
+# Set this false and enable instance mode for a platform-managed host.
+cs2_server_manager_bootstrap_servers: true
+cs2_server_manager_num_servers: 1
+cs2_server_manager_rcon_password: ""
+cs2_server_manager_hostname_prefix: "CS2 Server"
+cs2_server_manager_base_game_port: 27015
+cs2_server_manager_base_tv_port: 27020
+
+# Ready Up beta is the plugin version used by the supplied image build.
+cs2_server_manager_readyup_channel: beta
+cs2_server_manager_readyup_license: noncommercial
+cs2_server_manager_license_key: ""
+cs2_server_manager_force_readyup_update: false
+
+# Optional platform-managed instance mode. Use with bootstrap_servers=false.
+cs2_server_manager_configure_instance_backend: false
+
+# Only used when bootstrap_servers=false. Downloads/updates about 70 GB.
+cs2_server_manager_preload_game: false

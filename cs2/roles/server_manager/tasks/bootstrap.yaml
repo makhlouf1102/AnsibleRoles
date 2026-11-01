@@ -1,0 +1,50 @@
+---
+- name: Show available disk space before downloading CS2
+  ansible.builtin.command:
+    argv:
+      - df
+      - -h
+      - /
+      - "{{ cs2_server_manager_home }}"
+      - /tmp
+  become: true
+  changed_when: false
+  when: cs2_server_manager_bootstrap_servers | bool
+
+- name: Bootstrap CS2 servers
+  block:
+    - name: Run CSM bootstrap
+      ansible.builtin.command:
+        argv:
+          - "{{ cs2_server_manager_binary }}"
+          - bootstrap
+        creates: "{{ cs2_server_manager_home }}/server-1"
+      become: true
+      become_user: "{{ cs2_server_manager_user }}"
+      environment:
+        BASE_GAME_PORT: "{{ cs2_server_manager_base_game_port }}"
+        BASE_TV_PORT: "{{ cs2_server_manager_base_tv_port }}"
+        HOME: "{{ cs2_server_manager_home }}"
+        HOSTNAME_PREFIX: "{{ cs2_server_manager_hostname_prefix }}"
+        NUM_SERVERS: "{{ cs2_server_manager_num_servers }}"
+        RCON_PASSWORD: "{{ cs2_server_manager_rcon_password }}"
+      no_log: true
+  rescue:
+    - name: Show available disk space after a failed bootstrap
+      ansible.builtin.command:
+        argv:
+          - df
+          - -h
+          - /
+          - "{{ cs2_server_manager_home }}"
+          - /tmp
+      become: true
+      changed_when: false
+      failed_when: false
+
+    - name: Report the bootstrap log location
+      ansible.builtin.fail:
+        msg: >-
+          CSM bootstrap failed. The RCON password is hidden from Ansible output;
+          inspect /tmp/csm-bootstrap.log on the target for details.
+  when: cs2_server_manager_bootstrap_servers | bool

@@ -1,0 +1,26 @@
+---
+- name: Check CS2 Server Manager host requirements
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution in ["Debian", "Ubuntu"]
+      - ansible_architecture in ["x86_64", "aarch64"]
+      - ansible_service_mgr == "systemd"
+      - cs2_server_manager_user != "root"
+      - cs2_server_manager_readyup_channel in ["stable", "beta"]
+      - cs2_server_manager_readyup_license in ["noncommercial", "commercial"]
+      - cs2_server_manager_readyup_license != "commercial" or cs2_server_manager_license_key | length > 0
+      - not (cs2_server_manager_bootstrap_servers | bool and cs2_server_manager_configure_instance_backend | bool)
+      - not (cs2_server_manager_bootstrap_servers | bool) or cs2_server_manager_num_servers | int > 0
+      - >-
+        not (cs2_server_manager_bootstrap_servers | bool) or
+        cs2_server_manager_rcon_password | length > 0
+      - >-
+        cs2_server_manager_version == "latest" or
+        cs2_server_manager_version is match('^v[0-9]+[.][0-9]+[.][0-9]+$')
+    fail_msg: >-
+      CS2 Server Manager requires Debian or Ubuntu on x86_64 or arm64 with
+      systemd, and must run as a regular Linux account. Server bootstrap needs
+      a non-empty RCON password and cannot be combined with instance mode.
+      Ready Up channel must be stable or beta, and its license must be
+      noncommercial or commercial (commercial use also needs a license key).
+      Pin CSM with a v-prefixed release tag or use latest.

@@ -1,0 +1,82 @@
+---
+- name: Select the Ready Up release channel
+  ansible.builtin.command:
+    argv:
+      - "{{ cs2_server_manager_binary }}"
+      - plugins
+      - channel
+      - "{{ cs2_server_manager_readyup_channel }}"
+  become: true
+  become_user: "{{ cs2_server_manager_user }}"
+  environment:
+    HOME: "{{ cs2_server_manager_home }}"
+  changed_when: false
+  when: cs2_server_manager_bootstrap_servers | bool
+
+- name: Accept the Ready Up license choice
+  ansible.builtin.command:
+    argv:
+      - "{{ cs2_server_manager_binary }}"
+      - plugins
+      - license
+      - "{{ cs2_server_manager_readyup_license }}"
+  become: true
+  become_user: "{{ cs2_server_manager_user }}"
+  environment:
+    HOME: "{{ cs2_server_manager_home }}"
+  changed_when: false
+  when: cs2_server_manager_bootstrap_servers | bool
+
+- name: Set the commercial license key
+  ansible.builtin.command:
+    argv:
+      - "{{ cs2_server_manager_binary }}"
+      - license
+      - set
+      - "{{ cs2_server_manager_license_key }}"
+  become: true
+  become_user: "{{ cs2_server_manager_user }}"
+  environment:
+    HOME: "{{ cs2_server_manager_home }}"
+  changed_when: false
+  no_log: true
+  when:
+    - cs2_server_manager_bootstrap_servers | bool
+    - cs2_server_manager_readyup_license == "commercial"
+
+- name: Check the Ready Up update marker
+  ansible.builtin.stat:
+    path: >-
+      {{ cs2_server_manager_home }}/.ansible-csm-readyup-{{ cs2_server_manager_readyup_channel }}-{{ cs2_server_manager_readyup_license }}
+  register: cs2_server_manager_readyup_marker
+  become: true
+  become_user: "{{ cs2_server_manager_user }}"
+  when: cs2_server_manager_bootstrap_servers | bool
+
+- name: Install or update Ready Up plugins
+  ansible.builtin.command:
+    argv:
+      - "{{ cs2_server_manager_binary }}"
+      - update-plugins
+  become: true
+  become_user: "{{ cs2_server_manager_user }}"
+  environment:
+    HOME: "{{ cs2_server_manager_home }}"
+  register: cs2_server_manager_readyup_update
+  when: >-
+    cs2_server_manager_bootstrap_servers | bool and
+    (cs2_server_manager_force_readyup_update | bool or
+    not cs2_server_manager_readyup_marker.stat.exists)
+
+- name: Record the Ready Up installation
+  ansible.builtin.file:
+    path: >-
+      {{ cs2_server_manager_home }}/.ansible-csm-readyup-{{ cs2_server_manager_readyup_channel }}-{{ cs2_server_manager_readyup_license }}
+    state: touch
+    owner: "{{ cs2_server_manager_user }}"
+    group: "{{ cs2_server_manager_group }}"
+    mode: "0600"
+  become: true
+  when:
+    - cs2_server_manager_bootstrap_servers | bool
+    - cs2_server_manager_readyup_update is changed

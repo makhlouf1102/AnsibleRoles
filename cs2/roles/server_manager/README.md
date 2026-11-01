@@ -11,6 +11,12 @@ run as the configured regular user. See the
 [official install guide](https://docs.autotournament.gg/cs2/server-manager/install)
 and [host requirements](https://docs.autotournament.gg/modules/cs2/server-requirements).
 
+## Task layout
+
+The role stays a single `server_manager` role; `tasks/main.yaml` imports focused
+files for validation, account creation, installation, host setup, server
+bootstrap, Ready Up configuration, and optional instance/preload setup.
+
 ## Example
 
 ```yaml

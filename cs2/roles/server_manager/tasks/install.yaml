@@ -1,0 +1,21 @@
+---
+- name: Select the CSM release asset for this architecture
+  ansible.builtin.set_fact:
+    cs2_server_manager_asset: >-
+      csm-linux-{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}
+    cs2_server_manager_release_path: >-
+      {{ 'latest/download' if cs2_server_manager_version == 'latest' else 'download/' ~ cs2_server_manager_version }}
+  changed_when: false
+
+- name: Download CS2 Server Manager
+  ansible.builtin.get_url:
+    url: >-
+      https://github.com/Auto-Tournament/cs2-server-manager/releases/{{ cs2_server_manager_release_path }}/{{ cs2_server_manager_asset }}
+    dest: "{{ cs2_server_manager_binary }}"
+    owner: root
+    group: root
+    mode: "0755"
+    # Ensure changing from latest to a pinned tag (or between tags) replaces
+    # the installed binary. An unchanged download is not reported as changed.
+    force: true
+  become: true

@@ -1,0 +1,15 @@
+---
+- name: Configure CS2 Server Manager to use instance mode
+  ansible.builtin.command:
+    argv:
+      - "{{ cs2_server_manager_binary }}"
+      - instance
+      - config
+      - backend
+      - instances
+  become: true
+  become_user: "{{ cs2_server_manager_user }}"
+  environment:
+    HOME: "{{ cs2_server_manager_home }}"
+  changed_when: false
+  when: cs2_server_manager_configure_instance_backend | bool

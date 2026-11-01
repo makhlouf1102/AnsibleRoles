@@ -1,0 +1,16 @@
+---
+- name: Create the CS2 Server Manager group
+  ansible.builtin.group:
+    name: "{{ cs2_server_manager_group }}"
+    state: present
+  become: true
+
+- name: Create the CS2 Server Manager user
+  ansible.builtin.user:
+    name: "{{ cs2_server_manager_user }}"
+    group: "{{ cs2_server_manager_group }}"
+    home: "{{ cs2_server_manager_home }}"
+    create_home: true
+    shell: /bin/bash
+    state: present
+  become: true

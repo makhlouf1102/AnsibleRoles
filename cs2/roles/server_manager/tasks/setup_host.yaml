@@ -1,0 +1,13 @@
+---
+- name: Set up CS2 Server Manager host dependencies and user files
+  ansible.builtin.command:
+    argv:
+      - "{{ cs2_server_manager_binary }}"
+      - setup-host
+  environment:
+    HOME: "{{ cs2_server_manager_home }}"
+    LOGNAME: "{{ cs2_server_manager_user }}"
+    SUDO_USER: "{{ cs2_server_manager_user }}"
+    USER: "{{ cs2_server_manager_user }}"
+  become: true
+  changed_when: false

@@ -1,0 +1,14 @@
+---
+- name: Download the shared CS2 installation
+  ansible.builtin.command:
+    argv:
+      - "{{ cs2_server_manager_binary }}"
+      - update-game
+  become: true
+  become_user: "{{ cs2_server_manager_user }}"
+  environment:
+    HOME: "{{ cs2_server_manager_home }}"
+  changed_when: false
+  when:
+    - cs2_server_manager_preload_game | bool
+    - not cs2_server_manager_bootstrap_servers | bool
